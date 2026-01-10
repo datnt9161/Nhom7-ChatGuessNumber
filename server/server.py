@@ -116,14 +116,14 @@ class GameServer:
                         if username is None:
                             self.send_to_client(
                                 client_socket,
-                                {'type': 'SYSTEM', 'content': 'Bạn phải đăng nhập trước khi đoán số.'},
+                                {'type': 'SYSTEM', 'content': 'Bạn phải đăng nhập trước khi đoán số.', 'timestamp': self.get_timestamp()},
                             )
                             continue
 
                         if not isinstance(number, int):
                             self.send_to_client(
                                 client_socket,
-                                {'type': 'SYSTEM', 'content': 'Số đoán không hợp lệ.'},
+                                {'type': 'SYSTEM', 'content': 'Số đoán không hợp lệ.', 'timestamp': self.get_timestamp()},
                             )
                             continue
 

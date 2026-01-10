@@ -25,6 +25,7 @@ class ChatGuessApp:
         self.username: str | None = None
         self._pending_login_username: str | None = None
         self._login_fallback_timer: threading.Timer | None = None
+        self._ranking_data: list = []  # Lưu ranking data để hiển thị
 
     def _on_connect_clicked(self, host: str, port: int) -> None:
         # Khóa nút để tránh bấm nhiều lần
@@ -83,10 +84,35 @@ class ChatGuessApp:
         self._login_fallback_timer.start()
 
     def _proceed_to_chat(self, username: str) -> None:
+        """Tuần 3: Chuyển sang MainGameView với Chat + Game ở giữa"""
         self.username = username
-        self.root.after(0, lambda: self.root.show_chat_view(on_send=self._send_chat_message, username=username))
+        self.root.after(0, lambda: self.root.show_main_game_view(
+            on_send_chat=self._send_chat_message,
+            on_guess=self._send_guess_message,
+            on_show_ranking=self._show_ranking_view,
+            username=username
+        ))
         # welcome system message
-        self.root.after(50, lambda: self.root.chat_view.add_message("System", f"Bạn đã đăng nhập là {username}", system=True))
+        self.root.after(50, lambda: self.root.main_game_view.get_chat_view().add_message(
+            "System", f"Bạn đã đăng nhập là {username}. Chúc mừng bạn tham gia game!", system=True
+        ))
+
+    def _show_ranking_view(self) -> None:
+        """Hiển thị trang bảng xếp hạng riêng"""
+        self.root.after(0, lambda: self.root.show_ranking_view(
+            on_back=self._back_to_main_game,
+            ranking_data=self._ranking_data,
+            username=self.username
+        ))
+
+    def _back_to_main_game(self) -> None:
+        """Quay lại màn hình game chính"""
+        self.root.after(0, lambda: self.root.show_main_game_view(
+            on_send_chat=self._send_chat_message,
+            on_guess=self._send_guess_message,
+            on_show_ranking=self._show_ranking_view,
+            username=self.username
+        ))
 
     def _on_network_message(self, msg: dict) -> None:
         # Runs in network thread; schedule UI updates via root.after
@@ -103,12 +129,42 @@ class ChatGuessApp:
             username = msg.get("username", "?")
             content = msg.get("content", "")
             ts = msg.get("timestamp")
-            self.root.after(0, lambda: self.root.chat_view.add_message(username, content, timestamp=ts))
+            if hasattr(self.root, 'main_game_view') and self.root.main_game_view:
+                self.root.after(0, lambda: self.root.main_game_view.get_chat_view().add_message(
+                    username, content, timestamp=ts
+                ))
+            elif hasattr(self.root, 'chat_view') and self.root.chat_view:
+                self.root.after(0, lambda: self.root.chat_view.add_message(username, content, timestamp=ts))
         elif mtype == "SYSTEM":
             content = msg.get("content", "")
             ts = msg.get("timestamp")
-            self.root.after(0, lambda: self.root.chat_view.add_message("System", content, timestamp=ts, system=True))
-        # ignore other types for now
+            if hasattr(self.root, 'main_game_view') and self.root.main_game_view:
+                self.root.after(0, lambda: self.root.main_game_view.get_chat_view().add_message(
+                    "System", content, timestamp=ts, system=True
+                ))
+            elif hasattr(self.root, 'chat_view') and self.root.chat_view:
+                self.root.after(0, lambda: self.root.chat_view.add_message("System", content, timestamp=ts, system=True))
+        elif mtype == "RESULT":
+            # Xử lý kết quả đoán số (HIGH/LOW/CORRECT)
+            result = msg.get("result", "")
+            message = msg.get("content", "")
+            if hasattr(self.root, 'main_game_view') and self.root.main_game_view:
+                self.root.after(0, lambda: self.root.main_game_view.get_game_interface().handle_result(result, message))
+        elif mtype == "RANKING":
+            # Cập nhật bảng xếp hạng - lưu data và cập nhật cả 2 view
+            ranking_data = msg.get("ranking", [])
+            self._ranking_data = ranking_data
+            # Cập nhật ranking view nếu đang hiển thị
+            if hasattr(self.root, 'ranking_view') and self.root.ranking_view:
+                self.root.after(0, lambda: self.root.ranking_view.update_ranking(ranking_data))
+        elif mtype == "NEW_GAME":
+            # Bắt đầu game mới
+            content = msg.get("content", "Game mới đã bắt đầu!")
+            if hasattr(self.root, 'main_game_view') and self.root.main_game_view:
+                self.root.after(0, lambda: self.root.main_game_view.get_game_interface().start_new_game())
+                self.root.after(100, lambda: self.root.main_game_view.get_chat_view().add_message(
+                    "System", content, timestamp=msg.get("timestamp"), system=True
+                ))
 
     def _send_chat_message(self, text: str) -> None:
         if not self.username:
@@ -122,12 +178,43 @@ class ChatGuessApp:
         }
         # optimistic update
         now = datetime.now().strftime("%H:%M:%S")
-        self.root.chat_view.add_message(self.username, text, timestamp=now)
+        if hasattr(self.root, 'main_game_view') and self.root.main_game_view:
+            self.root.main_game_view.get_chat_view().add_message(self.username, text, timestamp=now)
+        elif hasattr(self.root, 'chat_view') and self.root.chat_view:
+            self.root.chat_view.add_message(self.username, text, timestamp=now)
         try:
             self.network.send_message(msg)
         except OSError:
             # nếu gửi thất bại, thông báo và cho phép retry trong UI
-            self.root.after(0, lambda: self.root.chat_view.add_message("System", "Không gửi được tin nhắn (mất kết nối).", system=True))
+            if hasattr(self.root, 'main_game_view') and self.root.main_game_view:
+                self.root.after(0, lambda: self.root.main_game_view.get_chat_view().add_message(
+                    "System", "Không gửi được tin nhắn (mất kết nối).", system=True
+                ))
+            elif hasattr(self.root, 'chat_view') and self.root.chat_view:
+                self.root.after(0, lambda: self.root.chat_view.add_message("System", "Không gửi được tin nhắn (mất kết nối).", system=True))
+
+    def _send_guess_message(self, guess: int) -> None:
+        """Gửi số đoán tới server (tuần 3)"""
+        if not self.username:
+            self.root.show_error("Lỗi", "Bạn cần đăng nhập trước khi chơi game.")
+            return
+        msg = {
+            "type": "GUESS",
+            "username": self.username,
+            "content": str(guess),
+            "timestamp": datetime.utcnow().isoformat(),
+        }
+        try:
+            self.network.send_message(msg)
+        except OSError:
+            # nếu gửi thất bại, thông báo
+            if hasattr(self.root, 'main_game_view') and self.root.main_game_view:
+                self.root.after(0, lambda: self.root.main_game_view.get_chat_view().add_message(
+                    "System", "Không gửi được số đoán (mất kết nối).", system=True
+                ))
+                self.root.after(100, lambda: self.root.main_game_view.get_game_interface()._show_result(
+                    "Lỗi kết nối! Vui lòng kiểm tra lại.", "#ef4444"
+                ))
 
     def _handle_disconnected(self, reason: str) -> None:
         # show error and revert to connection view
