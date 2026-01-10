@@ -11,22 +11,31 @@ PORT = 5555
 
 def receive_messages(client_socket):
     """Thread nhận tin nhắn từ server"""
+    buffer = b""
     while True:
         try:
-            data = client_socket.recv(4096).decode('utf-8')
+            data = client_socket.recv(4096)
             if not data:
                 break
-            message = json.loads(data)
-            print(f"\n[SERVER] {message}")
-            print(">> ", end="", flush=True)
+            buffer += data
+            while b"\n" in buffer:
+                line, buffer = buffer.split(b"\n", 1)
+                if not line:
+                    continue
+                try:
+                    message = json.loads(line.decode('utf-8'))
+                except Exception:
+                    continue
+                print(f"\n[SERVER] {message}")
+                print(">> ", end="", flush=True)
         except:
             break
 
 def send_message(client_socket, msg_type, **kwargs):
     """Gửi message đến server"""
     message = {"type": msg_type, **kwargs}
-    data = json.dumps(message, ensure_ascii=False).encode('utf-8')
-    client_socket.send(data)
+    data = (json.dumps(message, ensure_ascii=False) + "\n").encode('utf-8')
+    client_socket.sendall(data)
 
 def main():
     client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
