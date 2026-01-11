@@ -23,7 +23,8 @@ class GameServer:
         # Game state (single room)
         self.secret_number = random.randint(1, 100)
         self.scores = {}  # {username: points}
-        self.guess_counts = {}  # {username: attempts}
+        self.guess_counts = {}  # {username: attempts trong game hiện tại}
+        self.max_guesses = 10  # Giới hạn số lần đoán
 
     def start(self):
         """Khởi động server"""
@@ -96,6 +97,13 @@ class GameServer:
                                 exclude=client_socket,
                             )
 
+                            # Gửi thông báo game đang chạy cho user mới
+                            self.send_to_client(client_socket, {
+                                'type': 'SYSTEM',
+                                'content': f'🎮 Chào mừng! Đoán số từ 1-100. Bạn có {self.max_guesses} lượt đoán!',
+                                'timestamp': self.get_timestamp(),
+                            })
+
                             # Send current ranking to the newly joined user
                             self.send_ranking(client_socket)
 
@@ -130,56 +138,96 @@ class GameServer:
                         # increment attempts
                         with self.lock:
                             self.guess_counts[username] = self.guess_counts.get(username, 0) + 1
+                            current_attempts = self.guess_counts[username]
+                            remaining = self.max_guesses - current_attempts
 
                         if number < self.secret_number:
-                            self.send_to_client(
-                                client_socket,
-                                {
-                                    'type': 'RESULT',
-                                    'result': 'LOW',
-                                    'timestamp': self.get_timestamp(),
-                                },
-                            )
+                            if remaining <= 0:
+                                # Hết lượt - THUA
+                                self.send_to_client(
+                                    client_socket,
+                                    {
+                                        'type': 'RESULT',
+                                        'result': 'LOSE',
+                                        'secret': self.secret_number,
+                                        'timestamp': self.get_timestamp(),
+                                    },
+                                )
+                            else:
+                                self.send_to_client(
+                                    client_socket,
+                                    {
+                                        'type': 'RESULT',
+                                        'result': 'LOW',
+                                        'remaining': remaining,
+                                        'timestamp': self.get_timestamp(),
+                                    },
+                                )
                         elif number > self.secret_number:
-                            self.send_to_client(
-                                client_socket,
-                                {
-                                    'type': 'RESULT',
-                                    'result': 'HIGH',
-                                    'timestamp': self.get_timestamp(),
-                                },
-                            )
+                            if remaining <= 0:
+                                # Hết lượt - THUA
+                                self.send_to_client(
+                                    client_socket,
+                                    {
+                                        'type': 'RESULT',
+                                        'result': 'LOSE',
+                                        'secret': self.secret_number,
+                                        'timestamp': self.get_timestamp(),
+                                    },
+                                )
+                            else:
+                                self.send_to_client(
+                                    client_socket,
+                                    {
+                                        'type': 'RESULT',
+                                        'result': 'HIGH',
+                                        'remaining': remaining,
+                                        'timestamp': self.get_timestamp(),
+                                    },
+                                )
                         else:
-                            # correct guess
+                            # ĐOÁN ĐÚNG - THẮNG
                             with self.lock:
-                                self.scores[username] = self.scores.get(username, 0) + max(1, 10 - self.guess_counts.get(username, 0))
+                                # Tính điểm: càng ít lần đoán càng nhiều điểm
+                                points = max(1, 11 - current_attempts) * 10
+                                self.scores[username] = self.scores.get(username, 0) + points
 
-                            # notify all
+                            # Thông báo cho tất cả
                             self.broadcast(
                                 {
                                     'type': 'SYSTEM',
-                                    'content': f"🎉 {username} đã đoán đúng số {self.secret_number}!",
+                                    'content': f"🎉 {username} đã THẮNG! Đoán đúng số {self.secret_number} sau {current_attempts} lần! (+{points} điểm)",
                                     'timestamp': self.get_timestamp(),
                                 }
                             )
 
-                            # send result to winner
+                            # Gửi kết quả cho người thắng
                             self.send_to_client(
                                 client_socket,
                                 {
                                     'type': 'RESULT',
-                                    'result': 'CORRECT',
+                                    'result': 'WIN',
+                                    'secret': self.secret_number,
+                                    'attempts': current_attempts,
+                                    'points': points,
                                     'timestamp': self.get_timestamp(),
                                 },
                             )
 
-                            # update and broadcast ranking
+                            # Cập nhật và broadcast ranking
                             self.broadcast_ranking()
 
-                            # start new game
+                            # Bắt đầu game mới
                             with self.lock:
                                 self.secret_number = random.randint(1, 100)
                                 self.guess_counts = {}
+                            
+                            # Thông báo game mới
+                            self.broadcast({
+                                'type': 'NEW_GAME',
+                                'content': f'🎮 Game mới! Đoán số từ 1-100. Bạn có {self.max_guesses} lượt đoán!',
+                                'timestamp': self.get_timestamp(),
+                            })
 
                     elif msg_type == 'DISCONNECT':
                         raise ConnectionResetError()

@@ -1,124 +1,82 @@
-# Chat and Guess Number Game
+# 🎮 Chat & Guess Number Game
 
-🎮 **Game đoán số multiplayer với chat real-time**
+Game đoán số kết hợp chat realtime, sử dụng Socket TCP theo mô hình Multi Client-Server.
 
-Dự án bài giữa kỳ môn Lập trình mạng - Kiến trúc Multi Client-Server sử dụng Socket.
+## 📋 Mô tả
 
-## 📋 Tổng quan
+- **Server**: Xử lý nhiều client đồng thời, quản lý game và chat
+- **Client**: Giao diện Tkinter với dark theme, hỗ trợ responsive
 
-Game cho phép nhiều người chơi cùng tham gia:
-- **Chat real-time** với tất cả người chơi
-- **Đoán số bí mật** từ 1-100 với gợi ý HIGH/LOW/CORRECT  
-- **Bảng xếp hạng** theo điểm số
-- **Giao diện đẹp** với dark theme
+## 🎯 Tính năng
 
-## 🚀 Cách chạy nhanh
+- 💬 Chat realtime giữa các người chơi
+- 🔢 Game đoán số (1-100) với 10 lượt đoán
+- 🏆 Bảng xếp hạng theo điểm
+- 🎨 Giao diện dark theme, responsive với scrollbar
 
-### Tự động (Khuyến nghị)
+## 🚀 Cài đặt & Chạy
+
+### Yêu cầu
+- Python 3.8+
+
+### Chạy Server
 ```bash
-python demo.py
-```
-
-### Thủ công
-```bash
-# Terminal 1: Khởi động server
 python server/server.py
-
-# Terminal 2: Khởi động client 1
-python chat-guess-number/client/client.py
-
-# Terminal 3: Khởi động client 2  
-python chat-guess-number/client/client.py
 ```
+Server chạy trên `0.0.0.0:5555`
 
-## 🧪 Testing
-
+### Chạy Client
 ```bash
-# Chạy integration test (server phải đang chạy)
-python server/test_integration.py
+python client/client.py
 ```
 
-## 📁 Cấu trúc dự án
+## 🎮 Cách chơi
+
+1. Kết nối đến server (mặc định `localhost:5555`)
+2. Đăng nhập với username
+3. Gõ `!start` trong chat để bắt đầu game
+4. Đoán số từ 1-100, có 10 lượt
+5. Gợi ý: "Số bí mật CAO HƠN" hoặc "THẤP HƠN"
+
+## � Tíunh điểm
+
+- **Thắng**: `(11 - số lượt đã đoán) × 10` điểm
+- **Thua**: 0 điểm
+
+## 📁 Cấu trúc
 
 ```
-chat-guess-number/
 ├── server/
-│   ├── server.py              # Server chính
-│   ├── test_integration.py    # Integration tests
-│   └── test_client.py         # Test client đơn giản
-├── chat-guess-number/client/
-│   ├── client.py              # Client chính
-│   ├── gui.py                 # Giao diện người dùng
-│   └── network.py             # Module mạng
-├── demo.py                    # Script demo tự động
-├── README.md                  # File này
-└── SRS_ChatGuessNumber.md     # Tài liệu yêu cầu
+│   └── server.py           # Backend server
+├── client/
+│   ├── client.py           # Main client
+│   ├── gui.py              # GUI wrapper
+│   ├── network.py          # Socket client
+│   └── views/              # UI components
+│       ├── root_window.py
+│       ├── main_game_view.py
+│       ├── chat_view.py
+│       ├── game_interface.py
+│       ├── ranking_view.py
+│       ├── connection_view.py
+│       ├── login_view.py
+│       └── styles.py
+├── SRS_ChatGuessNumber.md  # Tài liệu SRS
+└── README.md
 ```
 
-## 🎯 Cách chơi
+## 📡 Protocol
 
-1. **Kết nối**: Nhập IP server (127.0.0.1) và port (5555)
-2. **Đăng nhập**: Chọn username duy nhất
-3. **Chat**: Gửi tin nhắn cho tất cả người chơi
-4. **Đoán số**: Nhập số từ 1-100, nhận gợi ý HIGH/LOW/CORRECT
-5. **Xem ranking**: Kiểm tra bảng xếp hạng theo điểm
+JSON qua TCP, phân cách bằng newline (`\n`)
 
-## 🏆 Hệ thống điểm
+| Message | Mô tả |
+|---------|-------|
+| `LOGIN` | Đăng nhập |
+| `CHAT` | Gửi tin nhắn |
+| `GUESS` | Đoán số |
+| `RANKING` | Lấy bảng xếp hạng |
 
-- **Đoán đúng**: 10 - số lần đoán (tối thiểu 1 điểm)
-- **Ví dụ**: Đoán đúng sau 3 lần = 7 điểm
-- **Game mới** tự động bắt đầu sau khi có người thắng
+## 👥 Nhóm phát triển
 
-## 🔧 Yêu cầu hệ thống
-
-- **Python 3.7+**
-- **Tkinter** (thường có sẵn với Python)
-- **Hệ điều hành**: Windows/Linux/macOS
-
-## 📡 Giao thức mạng
-
-**Format**: Newline-delimited JSON qua TCP Socket
-
-**Các loại message**:
-- `LOGIN`: Đăng nhập với username
-- `CHAT`: Tin nhắn chat
-- `GUESS`: Đoán số (1-100)
-- `RESULT`: Kết quả đoán (HIGH/LOW/CORRECT)
-- `RANKING`: Cập nhật bảng xếp hạng
-- `SYSTEM`: Thông báo hệ thống
-
-## 🎨 Tính năng UI
-
-- **Dark theme** hiện đại
-- **Message bubbles** với màu sắc phân biệt
-- **Real-time updates** cho chat và ranking
-- **Responsive design** thích ứng kích thước cửa sổ
-- **Hover effects** và animations
-
-## 🧪 Tuần 4: Integration Testing & Bug Fixes
-
-### ✅ Tests đã thực hiện:
-- [x] Kết nối cơ bản server-client
-- [x] Hệ thống đăng nhập (username duy nhất)
-- [x] Chat real-time giữa nhiều client
-- [x] Logic game đoán số với binary search
-- [x] Xử lý nhiều client đồng thời (5+ clients)
-
-### 🐛 Bugs đã sửa:
-- [x] Port mặc định client (5000 → 5555)
-- [x] Thiếu timestamp trong SYSTEM messages
-- [x] Xử lý message format consistency
-
-### 📊 Kết quả testing:
-- **5/5 test cases PASS** (100%)
-- **Hỗ trợ 10+ clients đồng thời**
-- **Độ trễ < 500ms** cho mọi thao tác
-
-## 👥 Thành viên nhóm
-
-- **Backend Developer**: Server, game logic, protocol
-- **Frontend Developer**: GUI, UX/UI, client network
-
-## 📄 License
-
-Dự án học tập - Môn Lập trình mạng
+- **Backend**: Server, game logic, protocol
+- **Frontend**: Client GUI, network handler
